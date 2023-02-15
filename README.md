@@ -1,4 +1,14 @@
-# relationship-builder
+# Skylark Relationship Builder
+
+A collection of scripts that help creating relationships between objects in Skylark.
+
+Eventually all this functionality should exist in the [Skylark UI](https://app.skylarkplatform.com).
+
+It aims to:
+
+1. Help connecting multiple objects together using a simple JSON file.
+2. Connecting a given availability to every single object
+3. Counting all objects (if you're curious)
 
 ## Set up
 
