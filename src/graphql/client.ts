@@ -4,7 +4,8 @@ import { SKYLARK_API_KEY, SKYLARK_URI } from "../constants";
 export const createSkylarkClient = () =>
   new GraphQLClient(SKYLARK_URI, {
     headers: {
-      "x-api-key": SKYLARK_API_KEY,
+      Authorization: SKYLARK_API_KEY,
+      "x-bypass-cache": "1",
     },
   });
 

@@ -1,3 +1,4 @@
+import { getAllSkylarkObjectTypes } from "./get";
 import { SkylarkClient } from "./graphql/client";
 import { GET_SKYLARK_OBJECT_TYPES } from "./graphql/queries";
 import { GQLSkylarkObjectTypesResponse, Link } from "./interfaces";
@@ -23,12 +24,7 @@ export const validateObjectTypesExist = async (
   client: SkylarkClient,
   objectTypes: string[],
 ) => {
-  const data = await client.request<GQLSkylarkObjectTypesResponse>(
-    GET_SKYLARK_OBJECT_TYPES,
-  );
-  const objectTypesInSkylark = data.__type.possibleTypes.map(
-    ({ name }) => name,
-  );
+  const objectTypesInSkylark = await getAllSkylarkObjectTypes(client);
 
   const uniqueObjectTypes = new Set(objectTypes);
 

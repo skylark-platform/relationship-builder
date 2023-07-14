@@ -4,7 +4,7 @@ export interface ObjectInfo {
 }
 
 export interface Link {
-  from: ObjectInfo;
+  from: ObjectInfo & { relationshipName?: string };
   to: ObjectInfo;
 }
 
@@ -27,3 +27,20 @@ export interface GQLListObjectResponse {
     }[];
   };
 }
+
+export interface GQLObjectRelationshipsType {
+  GET_OBJECT_RELATIONSHIPS: {
+    name: string;
+    inputFields: {
+      name: string;
+      type: {
+        name: string;
+      };
+    }[];
+  } | null;
+}
+
+export type ObjectTypesWithRelationships = Record<
+  string,
+  { relationshipName: string; objectType: string }[]
+>;

@@ -1,8 +1,18 @@
-import { writeJSON } from "fs-extra";
+import { ensureFile, writeJSON } from "fs-extra";
 import { jsonToGraphQLQuery } from "json-to-graphql-query";
 import { SkylarkClient } from "./graphql/client";
-import { Link, ObjectInfo, GQLListObjectResponse } from "./interfaces";
+import {
+  Link,
+  ObjectInfo,
+  GQLListObjectResponse,
+  GQLObjectRelationshipsType,
+  ObjectTypesWithRelationships,
+} from "./interfaces";
 import { chunkArray, sleep } from "./utils";
+import {
+  getAllSkylarkObjectTypes,
+  getValidRelationshipsForObject,
+} from "./get";
 
 const commonArgs = {
   ignore_availability: true,
@@ -44,23 +54,39 @@ export const getObjectUid = async (
 };
 
 // https://docs.skylarkplatform.com/docs/link-existing-objects
-const linkObject = async (client: SkylarkClient, { from, to }: Link) => {
+const linkObject = async (
+  client: SkylarkClient,
+  { from, to }: Link,
+  allObjectTypesWithRelationships: ObjectTypesWithRelationships,
+) => {
   const operation = `update${from.type}`;
-
-  // TODO need to improve this because we can't guarantee the relationship name will match the object
 
   const argName = from.type
     .replaceAll(/(?<!^)[A-Z]/g, (match) => `_${match}`)
     .toLowerCase(); // Episode -> episode / ParentalGuidance -> parental_guidance
-  const relationshipName = `${to.type
-    .replaceAll(/(?<!^)[A-Z]/g, (match) => `_${match}`)
-    .toLowerCase()}s`; // Brand -> brands / ParentalGuidance -> parental_guidances
 
   const fromObjectExists = await getObjectUid(client, from, true);
   const toObjectUid = await getObjectUid(client, to, true);
 
   // Ignore any not found
   if (!toObjectUid || !fromObjectExists) {
+    return {
+      missingToExtId: toObjectUid ? "" : to.externalId,
+      missingFromExtId: fromObjectExists ? "" : from.externalId,
+    };
+  }
+
+  const relationshipsForFromObject = allObjectTypesWithRelationships[from.type];
+  const firstRelationshipMatchingToObjectType = relationshipsForFromObject.find(
+    (rel) => rel.objectType === to.type,
+  );
+
+  const relationshipName =
+    from.relationshipName ||
+    firstRelationshipMatchingToObjectType?.relationshipName;
+
+  // TODO fix this to report the relationship missing
+  if (!relationshipName) {
     return {
       missingToExtId: toObjectUid ? "" : to.externalId,
       missingFromExtId: fromObjectExists ? "" : from.externalId,
@@ -108,10 +134,28 @@ export const linkObjects = async (client: SkylarkClient, links: Link[]) => {
   const missingFromObjects = [];
   const missingToObjects = [];
 
+  const allObjectTypes = await getAllSkylarkObjectTypes(client);
+
+  const allObjectTypesWithRelationships: ObjectTypesWithRelationships =
+    Object.fromEntries(
+      await Promise.all(
+        allObjectTypes.map(async (objectType) => {
+          const relationships = await getValidRelationshipsForObject(
+            client,
+            objectType,
+          );
+
+          return [objectType, relationships];
+        }),
+      ),
+    );
+
   for (let index = 0; index < chunkedLinkObjects.length; index++) {
     const chunk = chunkedLinkObjects[index];
     const arr = await Promise.all(
-      chunk.map((link) => linkObject(client, link)),
+      chunk.map((link) =>
+        linkObject(client, link, allObjectTypesWithRelationships),
+      ),
     );
 
     missingFromObjects.push(
@@ -136,8 +180,14 @@ export const linkObjects = async (client: SkylarkClient, links: Link[]) => {
     );
   }
 
-  writeJSON("./logs/missingFromObjects.json", [...new Set(missingFromObjects)]);
-  writeJSON("./logs/missingToObjects.json", [...new Set(missingToObjects)]);
+  await ensureFile("./logs/missingFromObjects.json");
+  await ensureFile("./logs/missingToObjects.json");
+  await writeJSON("./logs/missingFromObjects.json", [
+    ...new Set(missingFromObjects),
+  ]);
+  await writeJSON("./logs/missingToObjects.json", [
+    ...new Set(missingToObjects),
+  ]);
 };
 
 export const fetchAllObjectsOfType = async (
